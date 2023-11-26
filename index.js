@@ -7,10 +7,6 @@ const flex = {
     column: "column",
     row: "row"
 };
-const linkResource = [
-    "https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@24,400,0,0",
-    "https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@24,400,0,0"
-];
 (function () {
     global = {
         curInputDom: 0,
@@ -18,7 +14,12 @@ const linkResource = [
         attributeName: "data-fillText",
         clipBoardList: [],
         spansText: randText(),
+        boardChildNodes: 3,
         style: {},
+        theme: true,
+        setting: {
+            spans: []
+        }
     }
     loadResource()
     initStyle()
@@ -29,30 +30,46 @@ const linkResource = [
 function icons() {
     // <span className="material-symbols-outlined">delete</span>
     // <span className="material-symbols-outlined">colorize</span>
+    // <span className="material-symbols-outlined">remove</span>
 }
 
-function getLink(href) {
+function getLink() {
     let link = document.createElement("link");
     link.rel = "stylesheet";
-    link.href = href;
+    link.href = "https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@24,400,0,0";
     return link
 }
 
 function loadResource() {
-    for (const l of linkResource) {
-        document.head.appendChild(getLink(l));
-    }
+    document.head.appendChild(getLink());
 }
 
 function initStyle() {
     global.style.boardStyle = `
     ${flexStyle({jc: flex.bs, fd: flex.column})}
+    position: absolute;
+    left: 0px;
+    top: 0px;
     width: 330px;
     height: 400px;
     margin: 10px;
     border: 5px solid skyblue;
     border-radius: 5px;
     overflow: auto;`
+    global.style.hiddenBoardStyle = `
+    ${flexStyle({})}
+    position: absolute;
+    left: 0px;
+    top: 0px;
+    width: 40px;
+    height: 40px;
+    margin: 10px;
+    border: 5px solid skyblue;
+    border-radius: 50%;
+    overflow: auto;
+    color: white;
+    background: skyblue;
+    display: none;`
     global.style.divStyle = `
                 ${flexStyle({fd: flex.column})}
                 width: 300px;
@@ -70,7 +87,7 @@ function initStyle() {
                 min-height: 100px; 
                 max-height: 100px; 
                 margin: 10px 20px;
-                border: 1px solid skyblue;
+                border: 1px solid ${themeColor()};
                 border-radius: 7px;
                 height: 70px;
                 padding: 0 10px 0 10px;`
@@ -91,7 +108,7 @@ function initStyle() {
     text-align: center;
     line-height: 33px;`
     global.style.textArea = `
-    border: 1px solid skyblue;
+    border: 1px solid ${themeColor()};
     border-radius: 5px;
     flex-grow: 0;
     flex-shrink: 0;
@@ -100,6 +117,58 @@ function initStyle() {
     min-height: 100px; 
     max-height: 100px; 
     margin: 10px 0 10px 0;`
+    global.style.iconStyle = `
+    font-family: 'Material Symbols Outlined';
+    font-weight: normal;
+    font-style: normal;
+    font-size: 24px;
+    line-height: 1;
+    letter-spacing: normal;
+    text-transform: none;
+    display: inline-block;
+    white-space: nowrap;
+    word-wrap: normal;
+    direction: ltr;
+    -webkit-font-feature-settings: 'liga';
+    -webkit-font-smoothing: antialiased;`
+    global.style.spanSettingStyle = `
+    width: 100%;
+    ${flexStyle({jc: flex.end})}
+    `
+    global.style.displayNone = "display: none;"
+    global.style.displayFlex = "display: flex;"
+    global.style.borderRed = "border: 1px solid red;"
+    global.style.borderSkyblue = "border: 1px solid skyblue;"
+}
+
+function themeColor() {
+    return global.theme ? "skyblue" : "black"
+}
+
+function isShow(show) {
+    return show ? "" : global.style.displayNone
+}
+
+function showDom(dom, add = global.style.displayFlex) {
+    dom.style.cssText = dom.style.cssText.replace(isShow(false), "")
+    dom.style.cssText += add
+}
+
+function hiddenDom(dom) {
+    dom.style.cssText += isShow(false)
+}
+
+function replaceStyle(dom, key, value) {
+    let list = dom.style.cssText.split(";");
+    for (let i = 0; i < list.length; i++) {
+        if (list[i].includes(key+":")) {
+            console.log(list[i])
+            list[i] = `${key}:${value}`
+            console.log(list[i])
+            break
+        }
+    }
+    dom.style.cssText = list.join(";")
 }
 
 function flexStyle({jc = flex.center, ai = flex.center, fd = flex.row}) {
@@ -109,14 +178,87 @@ function flexStyle({jc = flex.center, ai = flex.center, fd = flex.row}) {
             flex-direction: ${fd};`
 }
 
+function toBottom() {
+    global.board.scrollTop = global.board.scrollHeight
+}
+
+function moveDom(dom) {
+    let isDragging = false;
+    let x, y;
+
+    dom.addEventListener("mousedown", function (event) {
+        isDragging = true;
+        x = event.x;
+        y = event.y;
+    });
+
+    dom.addEventListener("mousemove", function (event) {
+        if (isDragging) {
+            let offsetX = event.x - x;
+            let offsetY = event.y - y;
+
+            dom.style.left = parseInt(dom.style.left) + offsetX + "px";
+            dom.style.top = parseInt(dom.style.top) + offsetY + "px";
+            x = event.x
+            y = event.y
+        }
+    });
+
+    dom.addEventListener("mouseup", function () {
+        isDragging = false;
+    });
+}
+
 //设置input节点
 function setInputDom() {
+    let downingKeys = [];
+    let editKey = "";
     let inputDoms = document.querySelectorAll('input[type="text"]');
     inputDoms.forEach(function (dom, i) {
         dom.setAttribute(global.attributeName, i)
         dom.addEventListener("click", function (event) {
             let d = event.target
             global.curInputDom = d.getAttribute(global.attributeName)
+        })
+        dom.addEventListener("keydown", function (event) {
+            //快捷键模式，按下Alt开始
+            if (event.key === "Alt") {
+                downingKeys = []
+                downingKeys.push(event.key)
+                editKey = event.key
+                return
+            }
+            if (downingKeys.length > 0) {
+                if (downingKeys.indexOf(event.key) !== -1) return;
+                downingKeys.push(event.key)
+                editKey += "+" + event.key
+                global.setting.spans.map(v => {
+                    if (editKey === v.key) {
+                        dom.value = global.spansText[v.index] || dom.value
+                        event.preventDefault()
+                        downingKeys = []
+                        editKey = ""
+                    }
+                })
+                return;
+            }
+
+            //编辑模式
+            let str = dom.value + event.key
+            global.setting.spans.map(v => {
+                if (str === v.key.split("+").join("")) {
+                    dom.value = global.spansText[v.index] || dom.value
+                    event.preventDefault() //阻止写入该字符
+                }
+            })
+        })
+        dom.addEventListener("keyup", function (event) {
+            let i = downingKeys.indexOf(event.key)
+            i !== -1 ? downingKeys.splice(i, 1) : null
+            if (event.key === "Alt") {
+                downingKeys = []
+                editKey = ""
+            }
         })
     })
 }
@@ -138,22 +280,28 @@ function getLocalData() {
     return list
 }
 
+//输入栏添加span
 function showInput() {
-    if (global.board.childNodes.length > 2) {
+    if (global.board.childNodes.length > global.board.childNodes) {
         return
     }
     let el = document.createElement("input");
     el.placeholder = "请输入内容，按回车添加"
     el.style.cssText = global.style.textArea
+    replaceStyle(el, "border", `1px solid ${themeColor()}`)
     el.addEventListener("keydown", function (event) {
         if (event.key === "Enter") {
             global.spansText.push(event.target.value)
             renderBoard(renderSpan())
-            global.board.scrollTop = global.board.scrollHeight
+            toBottom()
         }
     })
     global.board.appendChild(el)
-    global.board.scrollTop = global.board.scrollHeight
+    toBottom()
+}
+
+function getSpanText(index) {
+    return global.spansText[index]
 }
 
 function getSpans() {
@@ -166,15 +314,38 @@ function getSpans() {
 
 function getSpan(i, text) {
     let span = document.createElement("span")
-    span.innerHTML = `<p style="${global.style.pStyle}">${text}</p>`
+    span.innerHTML = `
+<p style="${global.style.pStyle}">${text}</p>
+<div style="${global.style.spanSettingStyle}${isShow(getSpanSetting(i).show)}">
+
+<input id="settingInput${i}" style="width: 80%; height: 30px;${isShow(getSpanSetting(i).input)}" type="text" placeholder="请按键设置" readonly>
+
+<span style="${global.style.iconStyle}${isShow(getSpanSetting(i).set)}" 
+onclick="settingCtl({input: true, set: false, finish: true, cancel: true, index: ${i}})">settings</span>
+
+<span style="${global.style.iconStyle}${isShow(getSpanSetting(i).finish)}" 
+onclick="save(${i})">done</span>
+
+<span style="${global.style.iconStyle}${isShow(getSpanSetting(i).cancel)}"
+onclick="cancel(${i})">close</span>
+</div>
+`
     span.style.cssText = global.style.spanStyle
+    replaceStyle(span, "border", `1px solid ${themeColor()}`)
     span.addEventListener("click", function (event) {
-        global.curSpan = i
+        selectSpan(i)
         let target = `${global.attributeName}="${global.curInputDom}"`
         let element = document.querySelector(`input[${target}]`);
-        element.value = event.target.innerText
+        element.value = text
     })
     return span
+}
+
+function selectSpan(i) {
+    let spanNodes = global.spanList.childNodes
+    replaceStyle(spanNodes[global.curSpan], "border", `1px solid ${themeColor()}`)
+    global.curSpan = i
+    replaceStyle(spanNodes[global.curSpan], "border", "1px solid red")
 }
 
 function delSpan() {
@@ -189,10 +360,10 @@ function delAllSpan() {
 }
 
 function renderBoard(spanListDom) {
-    global.board.replaceChild(spanListDom, global.board.childNodes[0])
+    global.board.replaceChild(spanListDom, global.board.childNodes[1])
     let l = global.board.childNodes.length
-    if (l > 2) {
-        for (let i = 2; i < l; i++) {
+    if (l > global.boardChildNodes) {
+        for (let i = global.boardChildNodes; i < l; i++) {
             global.board.removeChild(global.board.lastChild)
         }
     }
@@ -203,27 +374,208 @@ function renderSpan() {
     div.setAttribute("id", "textSpanList")
     div.style.cssText = flexStyle({fd: flex.column})
     div.append(...getSpans())
+    global.spanList = div
     return div
 }
 
-//操作面板
-function operationBoard() {
+function edit() {
+    settingCtl({show: !global.setting.show, set: !global.setting.set})
+}
+
+function settingCtl({show = true, input = false, set = true, finish = false, cancel = false, index = -1}) {
+    if (index !== -1) {
+        //单span控制
+        let has = false
+        for (const span of global.setting.spans) {
+            if (span.index === index) {
+                span.show = show
+                span.input = input
+                span.set = set
+                span.finish = finish
+                span.cancel = cancel
+                has = true
+            }
+        }
+        if (!has) {
+            global.setting.spans.push({
+                show: show,
+                input: input,
+                set: set,
+                finish: finish,
+                cancel: cancel,
+                index: index,
+                key: "",
+                editKey: ""
+            })
+        }
+    } else {
+        //全局控制
+        global.setting.show = show
+        global.setting.input = input
+        global.setting.set = set
+        global.setting.finish = finish
+        global.setting.cancel = cancel
+        global.setting.spans.map(v => {
+            v.show = show
+            v.input = input
+            v.set = set
+            v.finish = finish
+            v.cancel = cancel
+        })
+    }
+    renderBoard(renderSpan())
+    if (input) {
+        listenKey(index)
+    }
+
+    //阻止冒泡
+    let event = window.event || arguments.callee.caller.arguments[0];
+    event.stopPropagation()
+}
+
+function listenKey(index) {
+    let ss = getSpanSetting(index)
+    let input = document.getElementById("settingInput" + index);
+    input.focus()
+    input.value = ss.key
+    ss.editKey = ss.key
+    let downingKeys = [] //按下未松开的keys
+    input.addEventListener("keydown", function (event) {
+        if (event.key === "Backspace") {
+            //如果存在，则移除按下中的key
+            let i = downingKeys.indexOf(event.key)
+            i !== -1 ? downingKeys.splice(i, 1) : null
+
+            let arr = ss.editKey.split("+")
+            arr.pop()
+            ss.editKey = arr.join("+")
+        } else if (!downingKeys.includes(event.key)) {
+            if (ss.editKey === "") {
+                ss.editKey += event.key
+            } else {
+                ss.editKey += "+" + event.key
+            }
+            downingKeys.push(event.key)
+        }
+        input.value = ss.editKey
+    });
+    input.addEventListener("keyup", function (event) {
+        if (event.key !== "Backspace") {
+            let i = downingKeys.indexOf(event.key)
+            i !== -1 ? downingKeys.splice(i, 1) : null
+        }
+    });
+    let event = window.event || arguments.callee.caller.arguments[0];
+    event.stopPropagation()
+}
+
+function save(index) {
+    let ss = getSpanSetting(index)
+    let has = false
+    global.setting.spans.map(v => {
+        if (v.key === ss.editKey && v.index !== ss.index) {
+            alert(`文本 ${getSpanText(v.index)} 已设置该快捷键`)
+            has = true
+        }
+    })
+    if (!has) {
+        ss.key = ss.editKey
+        ss.editKey = ""
+        settingCtl({index: index})
+    }
+}
+
+function cancel(index) {
+    let ss = getSpanSetting(index)
+    ss.editKey = ""
+    settingCtl({index: index})
+}
+
+function getSpanSetting(index) {
+    let set = global.setting.spans.filter((v) => {
+        return index === v.index
+    })
+    return set.length > 0 ? set[0] : global.setting
+}
+
+function modeCtl() {
+    if(global.theme) {
+        global.theme = false
+        replaceStyle(global.board, "border", `5px solid ${themeColor()}`)
+        global.spanList.childNodes.forEach(v => {
+            replaceStyle(v, "border", `1px solid ${themeColor()}`)
+        })
+        return
+    }
+    global.theme = true
+    replaceStyle(global.board, "border", `5px solid ${themeColor()}`)
+    global.spanList.childNodes.forEach(v => {
+        replaceStyle(v, "border", `1px solid ${themeColor()}`)
+    })
+}
+
+function topOperation() {
     let operation = document.createElement("div")
     operation.style.width = "100%"
     operation.innerHTML = `
-<div id="operation" style="${flexStyle({jc: flex.end})}margin: 0 20px 10px 0px;">
+<div id="topOperation" style="${flexStyle({jc: flex.end})}margin: 0 20px 10px 0px;">
+    <span style="${global.style.iconStyle}font-size: 20px;" onclick="modeCtl()">light_mode</span>
+    <span style="${global.style.iconStyle}" onclick="toBottom()">expand_more</span>
+    <span style="${global.style.iconStyle}" onclick="boardCtl(false)">remove</span>
+</div>`
+    return operation
+}
+
+function bottomOperation() {
+    let operation = document.createElement("div")
+    operation.style.width = "100%"
+    operation.innerHTML = `
+<div id="bottomOperation" style="${flexStyle({jc: flex.end})}margin: 0 20px 10px 0px;">
+    <span style="${global.style.operationStyle}margin-right: 10px;" onclick="edit()">配置</span>    
     <span style="${global.style.operationStyle}margin-right: 10px;" onclick="showInput()">添加</span>    
     <span style="${global.style.operationStyle}margin-right: 10px;background: #ea5c5c;" onclick="delSpan()">删除</span>    
     <span style="${global.style.operationStyle}margin-right: 0px;background: #ea5c5c;" onclick="delAllSpan()">清空</span>
 </div>`
+    return operation
+}
 
-    let board = document.createElement("div");
-    board.style.cssText = global.style.boardStyle
-    board.setAttribute("id", "fillTextDiv")
-    board.appendChild(renderSpan())
-    board.appendChild(operation)
-    document.body.appendChild(board)
-    global.board = board
+function board() {
+    let b = document.createElement("div");
+    b.style.cssText = global.style.boardStyle
+    b.setAttribute("id", "fillTextBoard")
+    b.appendChild(topOperation())
+    b.appendChild(renderSpan())
+    b.appendChild(bottomOperation())
+    global.board = b
+    return b
+}
+
+function hiddenBoard() {
+    let hb = document.createElement("div")
+    hb.style.cssText = global.style.hiddenBoardStyle
+    hb.setAttribute("id", "fillTextHiddenBoard")
+    hb.innerHTML = `
+    <span style="${global.style.iconStyle}font-size:30px;" onclick="boardCtl(true)">add</span>
+    `
+    global.hiddenBoard = hb
+    return hb
+}
+
+function boardCtl(show) {
+    if (show) {
+        hiddenDom(global.hiddenBoard)
+        showDom(global.board)
+        return
+    }
+    hiddenDom(global.board)
+    showDom(global.hiddenBoard)
+}
+
+//操作面板
+function operationBoard() {
+    document.body.appendChild(board())
+    document.body.appendChild(hiddenBoard())
+    moveDom(global.board)
 }
 
 
