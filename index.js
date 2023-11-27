@@ -54,7 +54,8 @@ function initStyle() {
     background: white;
     border: 5px solid ${themeColor()};
     border-radius: 5px;
-    overflow: auto;`
+    overflow: auto;
+    z-index:99;`
     global.style.hiddenBoardStyle = `
     ${flexStyle({})}
     position: absolute;
@@ -68,6 +69,7 @@ function initStyle() {
     overflow: auto;
     color: white;
     background: skyblue;
+    z-index:99;
     display: none;`
     global.style.divStyle = `
                 ${flexStyle({fd: flex.column})}
@@ -210,19 +212,24 @@ function moveDom(dom) {
 
 function defaultGlobal() {
     return {
-        curInputDom: 0,
-        curSpan: 0,
-        attributeName: "data-fillText",
-        clipBoardList: [],
-        inputDoms: [],
-        spansText: randText(),
-        boardChildNodes: 3,
+        order: 0,
         style: {},
         theme: true,
-        order: 0,
-        setting: {
-            spans: []
-        }
+        curSpan: 0,
+        curInputDom: 0,
+        attributeName: "data-fillText",
+        inputDoms: [],
+        boardChildNodes: 3,
+        curCate: "default",
+        category: [
+            {
+                name: "default",
+                spansText: randText(),
+                setting: {
+                    spans: []
+                }
+            }
+        ]
     }
 }
 
@@ -248,6 +255,49 @@ function getGlobal() {
     return data
 }
 
+function getCurCateVal() {
+    global.category.forEach(v => {
+        if (v.name === global.curCate) {
+            return v
+        }
+    })
+    return global.category[0]
+}
+
+function showCateInput() {
+
+}
+
+function addCategory(name) {
+    global.category.push({
+        name: name,
+        spansText: [],
+        setting: {
+            spans: []
+        }
+    })
+}
+
+function categoryList() {
+    let list = []
+    for (let i = 0; i < global.category.length; i++) {
+        list.push(getCategorySpan(i, global.category[i]))
+    }
+    let div = document.createElement("div")
+    div.append(...list)
+    global.board.appendChild(div)
+}
+
+function getCategorySpan(i, cate) {
+    let span = document.createElement("span")
+    span.innerText = cate.name
+    span.style.cssText = global.style.spanStyle
+    span.addEventListener("click", function (event) {
+        console.log("wwww")
+    })
+    return span
+}
+
 //设置input节点
 function setInputDom() {
     let t = setInterval(() => {
@@ -260,7 +310,7 @@ function setInputDom() {
                 let d = event.target
                 global.curInputDom = d.getAttribute(global.attributeName)
                 if (global.order === 1) {
-                    d.value = global.spansText[global.curSpan]
+                    d.value = getCurCateVal().spansText[global.curSpan]
                 }
             })
             dom.addEventListener("keydown", function (event) {
@@ -275,9 +325,9 @@ function setInputDom() {
                     if (downingKeys.indexOf(event.key) !== -1) return;
                     downingKeys.push(event.key)
                     editKey += "+" + event.key
-                    global.setting.spans.map(v => {
+                    getCurCateVal().setting.spans.map(v => {
                         if (editKey === v.key) {
-                            dom.value = global.spansText[v.index] || dom.value
+                            dom.value = getCurCateVal().spansText[v.index] || dom.value
                             event.preventDefault()
                             downingKeys = []
                             editKey = ""
@@ -288,9 +338,9 @@ function setInputDom() {
 
                 //编辑模式
                 let str = dom.value + event.key
-                global.setting.spans.map(v => {
+                getCurCateVal().setting.spans.map(v => {
                     if (str === v.key.split("+").join("")) {
-                        dom.value = global.spansText[v.index] || dom.value
+                        dom.value = getCurCateVal().spansText[v.index] || dom.value
                         event.preventDefault() //阻止写入该字符
                     }
                 })
@@ -312,6 +362,9 @@ function setInputDom() {
 }
 
 function randText() {
+    if (online) {
+        return ["点击输入框，再点击该文本即可自动填写。也可设置快捷键填写。"]
+    }
     let list = []
     for (let i = 0; i < Math.round(Math.random() * 10 + 3); i++) {
         let s = ""
@@ -334,7 +387,7 @@ function showInput() {
     replaceStyle(el, "border", `1px solid ${themeColor()}`)
     el.addEventListener("keydown", function (event) {
         if (event.key === "Enter") {
-            global.spansText.push(event.target.value)
+            getCurCateVal().spansText.push(event.target.value)
             renderBoard(renderSpan())
             toBottom()
         }
@@ -344,13 +397,13 @@ function showInput() {
 }
 
 function getSpanText(index) {
-    return global.spansText[index]
+    return getCurCateVal().spansText[index]
 }
 
 function getSpans() {
     let list = []
-    for (let i = 0; i < global.spansText.length; i++) {
-        list.push(getSpan(i, global.spansText[i]))
+    for (let i = 0; i < getCurCateVal().spansText.length; i++) {
+        list.push(getSpan(i, getCurCateVal().spansText[i]))
     }
     return list
 }
@@ -402,21 +455,21 @@ function selectSpan(i) {
 }
 
 function delSpan() {
-    global.spansText.splice(global.curSpan, 1)
+    getCurCateVal().spansText.splice(global.curSpan, 1)
 
     let i = 0
-    global.setting.spans.map((v, index) => {
+    getCurCateVal().setting.spans.map((v, index) => {
         if (v.index === global.curSpan) {
             i = index
         }
     })
-    global.setting.spans.splice(i, 1)
+    getCurCateVal().setting.spans.splice(i, 1)
     global.curSpan = 0
     renderBoard(renderSpan())
 }
 
 function delAllSpan() {
-    global.spansText = []
+    getCurCateVal().spansText = []
     renderBoard(renderSpan())
 }
 
@@ -446,14 +499,14 @@ function changeOrder() {
 }
 
 function editKey() {
-    settingCtl({show: !global.setting.show, set: !global.setting.set})
+    settingCtl({show: !getCurCateVal().setting.show, set: !getCurCateVal().setting.set})
 }
 
 function settingCtl({show = true, input = false, set = true, finish = false, cancel = false, index = -1}) {
     if (index !== -1) {
         //单span控制
         let has = false
-        for (const span of global.setting.spans) {
+        for (const span of getCurCateVal().setting.spans) {
             if (span.index === index) {
                 span.show = show
                 span.input = input
@@ -464,18 +517,18 @@ function settingCtl({show = true, input = false, set = true, finish = false, can
             }
         }
         if (!has) {
-            global.setting.spans.push({
+            getCurCateVal().setting.spans.push({
                 show: show, input: input, set: set, finish: finish, cancel: cancel, index: index, key: "", editKey: ""
             })
         }
     } else {
         //全局控制
-        global.setting.show = show
-        global.setting.input = input
-        global.setting.set = set
-        global.setting.finish = finish
-        global.setting.cancel = cancel
-        global.setting.spans.map(v => {
+        getCurCateVal().setting.show = show
+        getCurCateVal().setting.input = input
+        getCurCateVal().setting.set = set
+        getCurCateVal().setting.finish = finish
+        getCurCateVal().setting.cancel = cancel
+        getCurCateVal().setting.spans.map(v => {
             v.show = show
             v.input = input
             v.set = set
@@ -532,7 +585,7 @@ function listenKey(index) {
 function saveKey(index) {
     let ss = getSpanSetting(index)
     let has = false
-    global.setting.spans.map(v => {
+    getCurCateVal().setting.spans.map(v => {
         if (v.key === ss.editKey && v.index !== ss.index) {
             alert(`文本 ${getSpanText(v.index)} 已设置该快捷键`)
             has = true
@@ -552,10 +605,10 @@ function cancel(index) {
 }
 
 function getSpanSetting(index) {
-    let set = global.setting.spans.filter((v) => {
+    let set = getCurCateVal().setting.spans.filter((v) => {
         return index === v.index
     })
-    return set.length > 0 ? set[0] : global.setting
+    return set.length > 0 ? set[0] : getCurCateVal().setting
 }
 
 function modeCtl() {
@@ -608,9 +661,13 @@ function bottomOperation() {
         <span style="${global.style.operationStyle}">保存配置</span> 
         <span id="orderOperation" style="${global.style.operationStyle}margin-right: 0px;">先填后选</span>
     </div>
+    <div style="${flexStyle({jc: flex.end})}margin: 0 20px 10px 0px;">
+        <span style="${global.style.operationStyle}">添加分类</span> 
+        <span style="${global.style.operationStyle}margin-right: 0px;">分类列表</span>
+    </div>
 </div>`
 
-    let list = [editKey, showInput, delSpan, delAllSpan, saveGlobal, changeOrder]
+    let list = [editKey, showInput, delSpan, delAllSpan, saveGlobal, changeOrder, showCateInput, categoryList]
     list.forEach((v, i) => {
         operation.getElementsByTagName("span")[i].addEventListener("click", v)
     })
