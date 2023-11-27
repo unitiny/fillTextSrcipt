@@ -1,30 +1,28 @@
+// ==UserScript==
+// @name         FillText
+// @namespace    http://tampermonkey.net/
+// @version      0.1
+// @description  try to take over the world!
+// @author       You
+// @match        https://*/*
+// @icon         data:image/gif;base64,R0lGODlhAQABAAAAACH5BAEKAAEALAAAAAABAAEAAAICTAEAOw==
+// @grant        unsafeWindow
+// @grant        GM_setValue
+// @grant        GM_getValue
+// ==/UserScript==
+
+let online = false
 let global = {};
 const flex = {
-    bs: "space-between",
-    start: "flex-start",
-    end: "flex-end",
-    center: "center",
-    column: "column",
-    row: "row"
+    bs: "space-between", start: "flex-start", end: "flex-end", center: "center", column: "column", row: "row"
 };
 (function () {
-    global = {
-        curInputDom: 0,
-        curSpan: 0,
-        attributeName: "data-fillText",
-        clipBoardList: [],
-        spansText: randText(),
-        boardChildNodes: 3,
-        style: {},
-        theme: true,
-        setting: {
-            spans: []
-        }
-    }
+    global = getGlobal()
     loadResource()
     initStyle()
     setInputDom()
     operationBoard()
+    saveGlobalInterval()
 })();
 
 function icons() {
@@ -53,7 +51,8 @@ function initStyle() {
     width: 330px;
     height: 400px;
     margin: 10px;
-    border: 5px solid skyblue;
+    background: white;
+    border: 5px solid ${themeColor()};
     border-radius: 5px;
     overflow: auto;`
     global.style.hiddenBoardStyle = `
@@ -99,14 +98,16 @@ function initStyle() {
     -webkit-box-orient: vertical;
     -webkit-line-clamp: 2;`
     global.style.operationStyle = `
-    width: 55px;
+    padding: 0 12px 0 12px;
+    width: auto;
     height: 35px;
     border-radius: 5px;
     background: #4bb84b;
     color: white;
     font-size: 16px;
     text-align: center;
-    line-height: 33px;`
+    line-height: 33px;
+    margin-right: 10px;`
     global.style.textArea = `
     border: 1px solid ${themeColor()};
     border-radius: 5px;
@@ -161,10 +162,8 @@ function hiddenDom(dom) {
 function replaceStyle(dom, key, value) {
     let list = dom.style.cssText.split(";");
     for (let i = 0; i < list.length; i++) {
-        if (list[i].includes(key+":")) {
-            console.log(list[i])
+        if (list[i].includes(key + ":")) {
             list[i] = `${key}:${value}`
-            console.log(list[i])
             break
         }
     }
@@ -209,58 +208,107 @@ function moveDom(dom) {
     });
 }
 
+function defaultGlobal() {
+    return {
+        curInputDom: 0,
+        curSpan: 0,
+        attributeName: "data-fillText",
+        clipBoardList: [],
+        inputDoms: [],
+        spansText: randText(),
+        boardChildNodes: 3,
+        style: {},
+        theme: true,
+        order: 0,
+        setting: {
+            spans: []
+        }
+    }
+}
+
+function saveGlobalInterval() {
+    setInterval(function () {
+        saveGlobal()
+    }, 1000 * 30)
+}
+
+function saveGlobal() {
+    online ? GM_setValue("fillTextGlobal", global) : null;
+}
+
+function getGlobal() {
+    if (!online) {
+        return defaultGlobal();
+    }
+
+    let data = GM_getValue("fillTextGlobal", global)
+    if (JSON.stringify(data) === "{}") {
+        return defaultGlobal()
+    }
+    return data
+}
+
 //设置input节点
 function setInputDom() {
-    let downingKeys = [];
-    let editKey = "";
-    let inputDoms = document.querySelectorAll('input[type="text"]');
-    inputDoms.forEach(function (dom, i) {
-        dom.setAttribute(global.attributeName, i)
-        dom.addEventListener("click", function (event) {
-            let d = event.target
-            global.curInputDom = d.getAttribute(global.attributeName)
-        })
-        dom.addEventListener("keydown", function (event) {
-            //快捷键模式，按下Alt开始
-            if (event.key === "Alt") {
-                downingKeys = []
-                downingKeys.push(event.key)
-                editKey = event.key
-                return
-            }
-            if (downingKeys.length > 0) {
-                if (downingKeys.indexOf(event.key) !== -1) return;
-                downingKeys.push(event.key)
-                editKey += "+" + event.key
+    let t = setInterval(() => {
+        let downingKeys = [];
+        let editKey = "";
+        let inputDoms = document.querySelectorAll('input');
+        inputDoms.forEach(function (dom, i) {
+            dom.setAttribute(global.attributeName, i)
+            dom.addEventListener("click", function (event) {
+                let d = event.target
+                global.curInputDom = d.getAttribute(global.attributeName)
+                if (global.order === 1) {
+                    d.value = global.spansText[global.curSpan]
+                }
+            })
+            dom.addEventListener("keydown", function (event) {
+                //快捷键模式，按下Alt开始
+                if (event.key === "Alt") {
+                    downingKeys = []
+                    downingKeys.push(event.key)
+                    editKey = event.key
+                    return
+                }
+                if (downingKeys.length > 0) {
+                    if (downingKeys.indexOf(event.key) !== -1) return;
+                    downingKeys.push(event.key)
+                    editKey += "+" + event.key
+                    global.setting.spans.map(v => {
+                        if (editKey === v.key) {
+                            dom.value = global.spansText[v.index] || dom.value
+                            event.preventDefault()
+                            downingKeys = []
+                            editKey = ""
+                        }
+                    })
+                    return;
+                }
+
+                //编辑模式
+                let str = dom.value + event.key
                 global.setting.spans.map(v => {
-                    if (editKey === v.key) {
+                    if (str === v.key.split("+").join("")) {
                         dom.value = global.spansText[v.index] || dom.value
-                        event.preventDefault()
-                        downingKeys = []
-                        editKey = ""
+                        event.preventDefault() //阻止写入该字符
                     }
                 })
-                return;
-            }
-
-            //编辑模式
-            let str = dom.value + event.key
-            global.setting.spans.map(v => {
-                if (str === v.key.split("+").join("")) {
-                    dom.value = global.spansText[v.index] || dom.value
-                    event.preventDefault() //阻止写入该字符
+            })
+            dom.addEventListener("keyup", function (event) {
+                let i = downingKeys.indexOf(event.key)
+                i !== -1 ? downingKeys.splice(i, 1) : null
+                if (event.key === "Alt") {
+                    downingKeys = []
+                    editKey = ""
                 }
             })
         })
-        dom.addEventListener("keyup", function (event) {
-            let i = downingKeys.indexOf(event.key)
-            i !== -1 ? downingKeys.splice(i, 1) : null
-            if (event.key === "Alt") {
-                downingKeys = []
-                editKey = ""
-            }
-        })
-    })
+        global.inputDoms = inputDoms
+        if (inputDoms.length > 0) {
+            clearInterval(t)
+        }
+    }, 1000)
 }
 
 function randText() {
@@ -272,11 +320,6 @@ function randText() {
         }
         list.push(s)
     }
-    return list
-}
-
-function getLocalData() {
-    let list = []
     return list
 }
 
@@ -320,23 +363,33 @@ function getSpan(i, text) {
 
 <input id="settingInput${i}" style="width: 80%; height: 30px;${isShow(getSpanSetting(i).input)}" type="text" placeholder="请按键设置" readonly>
 
-<span style="${global.style.iconStyle}${isShow(getSpanSetting(i).set)}" 
-onclick="settingCtl({input: true, set: false, finish: true, cancel: true, index: ${i}})">settings</span>
+<span style="${global.style.iconStyle}${isShow(getSpanSetting(i).set)}">settings</span>
 
-<span style="${global.style.iconStyle}${isShow(getSpanSetting(i).finish)}" 
-onclick="save(${i})">done</span>
+<span style="${global.style.iconStyle}${isShow(getSpanSetting(i).finish)}">done</span>
 
-<span style="${global.style.iconStyle}${isShow(getSpanSetting(i).cancel)}"
-onclick="cancel(${i})">close</span>
+<span style="${global.style.iconStyle}${isShow(getSpanSetting(i).cancel)}">close</span>
 </div>
 `
     span.style.cssText = global.style.spanStyle
     replaceStyle(span, "border", `1px solid ${themeColor()}`)
     span.addEventListener("click", function (event) {
         selectSpan(i)
-        let target = `${global.attributeName}="${global.curInputDom}"`
-        let element = document.querySelector(`input[${target}]`);
-        element.value = text
+        if (global.order === 0) {
+            let target = `${global.attributeName}="${global.curInputDom}"`
+            let element = document.querySelector(`input[${target}]`);
+            element.value = text
+        }
+    })
+
+    let childSpan = span.getElementsByTagName("span")
+    childSpan[0].addEventListener("click", function () {
+        settingCtl({input: true, set: false, finish: true, cancel: true, index: i})
+    })
+    childSpan[1].addEventListener("click", function () {
+        saveKey(i)
+    })
+    childSpan[2].addEventListener("click", function () {
+        cancel(i)
     })
     return span
 }
@@ -350,6 +403,14 @@ function selectSpan(i) {
 
 function delSpan() {
     global.spansText.splice(global.curSpan, 1)
+
+    let i = 0
+    global.setting.spans.map((v, index) => {
+        if (v.index === global.curSpan) {
+            i = index
+        }
+    })
+    global.setting.spans.splice(i, 1)
     global.curSpan = 0
     renderBoard(renderSpan())
 }
@@ -378,7 +439,13 @@ function renderSpan() {
     return div
 }
 
-function edit() {
+function changeOrder() {
+    let d = document.getElementById("orderOperation")
+    d.innerText = d.innerText === "先填后选" ? "先选后填" : "先填后选"
+    global.order = global.order ? 0 : 1
+}
+
+function editKey() {
     settingCtl({show: !global.setting.show, set: !global.setting.set})
 }
 
@@ -398,14 +465,7 @@ function settingCtl({show = true, input = false, set = true, finish = false, can
         }
         if (!has) {
             global.setting.spans.push({
-                show: show,
-                input: input,
-                set: set,
-                finish: finish,
-                cancel: cancel,
-                index: index,
-                key: "",
-                editKey: ""
+                show: show, input: input, set: set, finish: finish, cancel: cancel, index: index, key: "", editKey: ""
             })
         }
     } else {
@@ -469,7 +529,7 @@ function listenKey(index) {
     event.stopPropagation()
 }
 
-function save(index) {
+function saveKey(index) {
     let ss = getSpanSetting(index)
     let has = false
     global.setting.spans.map(v => {
@@ -499,7 +559,7 @@ function getSpanSetting(index) {
 }
 
 function modeCtl() {
-    if(global.theme) {
+    if (global.theme) {
         global.theme = false
         replaceStyle(global.board, "border", `5px solid ${themeColor()}`)
         global.spanList.childNodes.forEach(v => {
@@ -519,10 +579,17 @@ function topOperation() {
     operation.style.width = "100%"
     operation.innerHTML = `
 <div id="topOperation" style="${flexStyle({jc: flex.end})}margin: 0 20px 10px 0px;">
-    <span style="${global.style.iconStyle}font-size: 20px;" onclick="modeCtl()">light_mode</span>
-    <span style="${global.style.iconStyle}" onclick="toBottom()">expand_more</span>
-    <span style="${global.style.iconStyle}" onclick="boardCtl(false)">remove</span>
+    <span style="${global.style.iconStyle}font-size: 20px;">light_mode</span>
+    <span style="${global.style.iconStyle}">expand_more</span>
+    <span style="${global.style.iconStyle}">remove</span>
 </div>`
+
+    let childSpan = operation.getElementsByTagName("span")
+    childSpan[0].addEventListener("click", modeCtl)
+    childSpan[1].addEventListener("click", toBottom)
+    childSpan[2].addEventListener("click", function () {
+        boardCtl(false)
+    })
     return operation
 }
 
@@ -530,12 +597,23 @@ function bottomOperation() {
     let operation = document.createElement("div")
     operation.style.width = "100%"
     operation.innerHTML = `
-<div id="bottomOperation" style="${flexStyle({jc: flex.end})}margin: 0 20px 10px 0px;">
-    <span style="${global.style.operationStyle}margin-right: 10px;" onclick="edit()">配置</span>    
-    <span style="${global.style.operationStyle}margin-right: 10px;" onclick="showInput()">添加</span>    
-    <span style="${global.style.operationStyle}margin-right: 10px;background: #ea5c5c;" onclick="delSpan()">删除</span>    
-    <span style="${global.style.operationStyle}margin-right: 0px;background: #ea5c5c;" onclick="delAllSpan()">清空</span>
+<div id="bottomOperation">
+    <div style="${flexStyle({jc: flex.end})}margin: 0 20px 10px 0px;">
+        <span style="${global.style.operationStyle}" >快捷键</span>    
+        <span style="${global.style.operationStyle}">添加</span>    
+        <span style="${global.style.operationStyle}background: #ea5c5c;">删除</span>    
+        <span style="${global.style.operationStyle}margin-right: 0px;background: #ea5c5c;">清空</span>
+    </div>
+    <div style="${flexStyle({jc: flex.end})}margin: 0 20px 10px 0px;">
+        <span style="${global.style.operationStyle}">保存配置</span> 
+        <span id="orderOperation" style="${global.style.operationStyle}margin-right: 0px;">先填后选</span>
+    </div>
 </div>`
+
+    let list = [editKey, showInput, delSpan, delAllSpan, saveGlobal, changeOrder]
+    list.forEach((v, i) => {
+        operation.getElementsByTagName("span")[i].addEventListener("click", v)
+    })
     return operation
 }
 
@@ -555,8 +633,11 @@ function hiddenBoard() {
     hb.style.cssText = global.style.hiddenBoardStyle
     hb.setAttribute("id", "fillTextHiddenBoard")
     hb.innerHTML = `
-    <span style="${global.style.iconStyle}font-size:30px;" onclick="boardCtl(true)">add</span>
+    <span style="${global.style.iconStyle}font-size:30px;">add</span>
     `
+    hb.getElementsByTagName("span")[0].addEventListener("click", function () {
+        boardCtl(true)
+    })
     global.hiddenBoard = hb
     return hb
 }
