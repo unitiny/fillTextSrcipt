@@ -2,16 +2,17 @@
 // @name         FillText
 // @namespace    http://tampermonkey.net/
 // @version      0.1
-// @description  try to take over the world!
-// @author       You
+// @description  快速填写预设文本到输入框。
+// @author       Unitiny
 // @match        https://*/*
 // @icon         data:image/gif;base64,R0lGODlhAQABAAAAACH5BAEKAAEALAAAAAABAAEAAAICTAEAOw==
 // @grant        unsafeWindow
 // @grant        GM_setValue
 // @grant        GM_getValue
+// @license MIT
 // ==/UserScript==
 
-let online = false
+let online = true
 let global = {};
 const flex = {
     bs: "space-between", start: "flex-start", end: "flex-end", center: "center", column: "column", row: "row"
@@ -55,7 +56,7 @@ function initStyle() {
     border: 5px solid ${themeColor()};
     border-radius: 5px;
     overflow: auto;
-    z-index:99;`
+    z-index:999;`
     global.style.hiddenBoardStyle = `
     ${flexStyle({})}
     position: absolute;
@@ -69,7 +70,7 @@ function initStyle() {
     overflow: auto;
     color: white;
     background: skyblue;
-    z-index:99;
+    z-index:999;
     display: none;`
     global.style.divStyle = `
                 ${flexStyle({fd: flex.column})}
@@ -79,14 +80,25 @@ function initStyle() {
                 border: 1px solid skyblue;
                 border-radius: 5px;
                 overflow: auto`
+    global.style.cateSpanStyle = `
+                padding: 5px 12px;
+                width: auto;
+                height: 35px;
+                border: 1px solid ${themeColor()};
+                border-radius: 5px;
+                background: white;
+                font-size: 16px;
+                text-align: center;
+                line-height: 33px;
+                margin-right: 10px;`
     global.style.spanStyle = `
                 ${flexStyle({jc: flex.center, ai: flex.start, fd: flex.column})}
                 flex-grow: 0;
                 flex-shrink: 0;
-                min-width: 250px; 
-                max-width: 250px; 
-                min-height: 100px; 
-                max-height: 100px; 
+                min-width: 250px;
+                max-width: 250px;
+                min-height: 100px;
+                max-height: 100px;
                 margin: 10px 20px;
                 border: 1px solid ${themeColor()};
                 border-radius: 7px;
@@ -115,10 +127,10 @@ function initStyle() {
     border-radius: 5px;
     flex-grow: 0;
     flex-shrink: 0;
-    min-width: 250px; 
-    max-width: 250px; 
-    min-height: 100px; 
-    max-height: 100px; 
+    min-width: 250px;
+    max-width: 250px;
+    min-height: 100px;
+    max-height: 100px;
     margin: 10px 0 10px 0;`
     global.style.iconStyle = `
     font-family: 'Material Symbols Outlined';
@@ -146,6 +158,11 @@ function initStyle() {
 
 function themeColor() {
     return global.theme ? "skyblue" : "black"
+}
+
+//添加前缀来防止与原页面id重复
+function prefixStr(str) {
+    return `${global.prefix}-${str}`
 }
 
 function isShow(show) {
@@ -210,13 +227,26 @@ function moveDom(dom) {
     });
 }
 
+function doc() {
+    alert("快捷键建议Alt开头或纯字母数字，如：Alt+1、qq、11")
+}
+
+function containKeys(a, b) {
+    const aKeys = Object.keys(a);
+    const bKeys = Object.keys(b);
+
+    return aKeys.length >= bKeys.length && bKeys.every(key => aKeys.includes(key));
+}
+
 function defaultGlobal() {
     return {
         order: 0,
         style: {},
+        show: true,
         theme: true,
         curSpan: 0,
         curInputDom: 0,
+        prefix: "fillText",
         attributeName: "data-fillText",
         inputDoms: [],
         boardChildNodes: 3,
@@ -225,6 +255,13 @@ function defaultGlobal() {
             {
                 name: "default",
                 spansText: randText(),
+                setting: {
+                    spans: []
+                }
+            },
+            {
+                name: "常用",
+                spansText: [],
                 setting: {
                     spans: []
                 }
@@ -239,8 +276,8 @@ function saveGlobalInterval() {
     }, 1000 * 30)
 }
 
-function saveGlobal() {
-    online ? GM_setValue("fillTextGlobal", global) : null;
+function saveGlobal(g = global) {
+    online ? GM_setValue("fillTextGlobal", g) : null;
 }
 
 function getGlobal() {
@@ -248,27 +285,58 @@ function getGlobal() {
         return defaultGlobal();
     }
 
-    let data = GM_getValue("fillTextGlobal", global)
-    if (JSON.stringify(data) === "{}") {
+    let data = GM_getValue("fillTextGlobal")
+    if (!data || JSON.stringify(data) === "{}" || !containKeys(data, defaultGlobal())) {
+        saveGlobal(defaultGlobal())
         return defaultGlobal()
     }
+
     return data
 }
 
 function getCurCateVal() {
-    global.category.forEach(v => {
+    for (const v of global.category) {
         if (v.name === global.curCate) {
             return v
         }
-    })
+    }
     return global.category[0]
 }
 
 function showCateInput() {
-
+    if (global.board.childNodes.length > global.boardChildNodes + 1) {
+        return
+    }
+    let el = document.createElement("input");
+    el.placeholder = "请输入内容，按回车添加"
+    el.style.cssText = global.style.textArea
+    replaceStyle(el, "border", `1px solid ${themeColor()}`)
+    el.addEventListener("keydown", function (event) {
+        if (event.key === "Enter") {
+            addCategory(event.target.value)
+            renderBoard(renderSpan())
+            toBottom()
+        }
+    })
+    global.board.appendChild(el)
+    toBottom()
 }
 
 function addCategory(name) {
+    if (name.length > 10) {
+        alert("分类名过长")
+        return
+    }
+    let has = false
+    global.category.forEach((v, i) => {
+        if (v.name === name) {
+            alert("已存在该分类")
+            has = true
+            return
+        }
+    })
+
+    if (has) return
     global.category.push({
         name: name,
         spansText: [],
@@ -276,6 +344,18 @@ function addCategory(name) {
             spans: []
         }
     })
+    saveGlobal()
+}
+
+function delCategory(name) {
+    let index = 0
+    global.category.map((v, i) => {
+        if (v.name === name) {
+            index = i
+        }
+    })
+    global.category.splice(index, 1)
+    saveGlobal()
 }
 
 function categoryList() {
@@ -284,17 +364,40 @@ function categoryList() {
         list.push(getCategorySpan(i, global.category[i]))
     }
     let div = document.createElement("div")
+    div.setAttribute("id", prefixStr("categoryList"))
+    div.style.cssText = `${flexStyle({jc: flex.start})}width:80%; margin: 0 20px 10px 0px;`
     div.append(...list)
     global.board.appendChild(div)
+    toBottom()
 }
 
 function getCategorySpan(i, cate) {
+    let close = document.createElement("span")
+    close.style = global.style.iconStyle
+    close.style.cssText += `
+    position: absolute;
+    right: -9px;
+    top: -14px;`
+    close.innerText = "×"
+    close.addEventListener("click", function (event) {
+        delCategory(cate.name)
+        let div = document.getElementById(prefixStr("categoryList"))
+        div.removeChild(div.childNodes[i])
+        event.stopImmediatePropagation()
+    })
+
     let span = document.createElement("span")
     span.innerText = cate.name
-    span.style.cssText = global.style.spanStyle
+    span.style.cssText = global.style.cateSpanStyle
+    span.style.cssText += `position: relative;`
     span.addEventListener("click", function (event) {
-        console.log("wwww")
+        global.curSpan = 0
+        global.curCate = cate.name
+        renderBoard(renderSpan())
+        document.getElementById(prefixStr("curCate")).innerText = `当前分类：${global.curCate}`
     })
+
+    if (i !== 0) span.appendChild(close)
     return span
 }
 
@@ -378,7 +481,7 @@ function randText() {
 
 //输入栏添加span
 function showInput() {
-    if (global.board.childNodes.length > global.board.childNodes) {
+    if (global.board.childNodes.length > global.boardChildNodes + 1) {
         return
     }
     let el = document.createElement("input");
@@ -390,6 +493,7 @@ function showInput() {
             getCurCateVal().spansText.push(event.target.value)
             renderBoard(renderSpan())
             toBottom()
+            saveGlobal()
         }
     })
     global.board.appendChild(el)
@@ -448,7 +552,7 @@ function getSpan(i, text) {
 }
 
 function selectSpan(i) {
-    let spanNodes = global.spanList.childNodes
+    let spanNodes = getCurCateVal().spanList.childNodes
     replaceStyle(spanNodes[global.curSpan], "border", `1px solid ${themeColor()}`)
     global.curSpan = i
     replaceStyle(spanNodes[global.curSpan], "border", "1px solid red")
@@ -466,11 +570,13 @@ function delSpan() {
     getCurCateVal().setting.spans.splice(i, 1)
     global.curSpan = 0
     renderBoard(renderSpan())
+    saveGlobal()
 }
 
 function delAllSpan() {
     getCurCateVal().spansText = []
     renderBoard(renderSpan())
+    saveGlobal()
 }
 
 function renderBoard(spanListDom) {
@@ -488,14 +594,15 @@ function renderSpan() {
     div.setAttribute("id", "textSpanList")
     div.style.cssText = flexStyle({fd: flex.column})
     div.append(...getSpans())
-    global.spanList = div
+    getCurCateVal().spanList = div
     return div
 }
 
 function changeOrder() {
-    let d = document.getElementById("orderOperation")
+    let d = document.getElementById(prefixStr("orderOperation"))
     d.innerText = d.innerText === "先填后选" ? "先选后填" : "先填后选"
     global.order = global.order ? 0 : 1
+    saveGlobal()
 }
 
 function editKey() {
@@ -596,6 +703,7 @@ function saveKey(index) {
         ss.editKey = ""
         settingCtl({index: index})
     }
+    saveGlobal()
 }
 
 function cancel(index) {
@@ -615,23 +723,24 @@ function modeCtl() {
     if (global.theme) {
         global.theme = false
         replaceStyle(global.board, "border", `5px solid ${themeColor()}`)
-        global.spanList.childNodes.forEach(v => {
+        getCurCateVal().spanList.childNodes.forEach(v => {
             replaceStyle(v, "border", `1px solid ${themeColor()}`)
         })
         return
     }
     global.theme = true
     replaceStyle(global.board, "border", `5px solid ${themeColor()}`)
-    global.spanList.childNodes.forEach(v => {
+    getCurCateVal().spanList.childNodes.forEach(v => {
         replaceStyle(v, "border", `1px solid ${themeColor()}`)
     })
+    saveGlobal()
 }
 
 function topOperation() {
     let operation = document.createElement("div")
     operation.style.width = "100%"
     operation.innerHTML = `
-<div id="topOperation" style="${flexStyle({jc: flex.end})}margin: 0 20px 10px 0px;">
+<div id="${prefixStr("topOperation")}" style="${flexStyle({jc: flex.end})}margin: 0 20px 10px 0px;">
     <span style="${global.style.iconStyle}font-size: 20px;">light_mode</span>
     <span style="${global.style.iconStyle}">expand_more</span>
     <span style="${global.style.iconStyle}">remove</span>
@@ -650,24 +759,28 @@ function bottomOperation() {
     let operation = document.createElement("div")
     operation.style.width = "100%"
     operation.innerHTML = `
-<div id="bottomOperation">
+<div id="${prefixStr("bottomOperation")}">
     <div style="${flexStyle({jc: flex.end})}margin: 0 20px 10px 0px;">
-        <span style="${global.style.operationStyle}" >快捷键</span>    
-        <span style="${global.style.operationStyle}">添加</span>    
-        <span style="${global.style.operationStyle}background: #ea5c5c;">删除</span>    
+        <span style="${global.style.operationStyle}" >快捷键</span>
+        <span style="${global.style.operationStyle}">添加</span>
+        <span style="${global.style.operationStyle}background: #ea5c5c;">删除</span>
         <span style="${global.style.operationStyle}margin-right: 0px;background: #ea5c5c;">清空</span>
     </div>
     <div style="${flexStyle({jc: flex.end})}margin: 0 20px 10px 0px;">
-        <span style="${global.style.operationStyle}">保存配置</span> 
-        <span id="orderOperation" style="${global.style.operationStyle}margin-right: 0px;">先填后选</span>
+        <span style="${global.style.operationStyle}">说明</span>
+        <span style="${global.style.operationStyle}">保存配置</span>
+        <span id="${prefixStr("orderOperation")}" style="${global.style.operationStyle}margin-right: 0px;">先填后选</span>
     </div>
     <div style="${flexStyle({jc: flex.end})}margin: 0 20px 10px 0px;">
-        <span style="${global.style.operationStyle}">添加分类</span> 
+        <span style="${global.style.operationStyle}">添加分类</span>
         <span style="${global.style.operationStyle}margin-right: 0px;">分类列表</span>
+    </div>
+    <div style="${flexStyle({jc: flex.end})}margin: 0 20px 10px 0px;">
+        <span id="${prefixStr("curCate")}" style="${global.style.operationStyle}margin-right: 0px;">当前分类：${global.curCate}</span>
     </div>
 </div>`
 
-    let list = [editKey, showInput, delSpan, delAllSpan, saveGlobal, changeOrder, showCateInput, categoryList]
+    let list = [editKey, showInput, delSpan, delAllSpan, doc, saveGlobal, changeOrder, showCateInput, categoryList]
     list.forEach((v, i) => {
         operation.getElementsByTagName("span")[i].addEventListener("click", v)
     })
@@ -689,10 +802,8 @@ function hiddenBoard() {
     let hb = document.createElement("div")
     hb.style.cssText = global.style.hiddenBoardStyle
     hb.setAttribute("id", "fillTextHiddenBoard")
-    hb.innerHTML = `
-    <span style="${global.style.iconStyle}font-size:30px;">add</span>
-    `
-    hb.getElementsByTagName("span")[0].addEventListener("click", function () {
+    hb.innerHTML = `<span style="${global.style.iconStyle}font-size:30px;pointer-events: none;">add</span>`
+    hb.addEventListener("click", function () {
         boardCtl(true)
     })
     global.hiddenBoard = hb
@@ -703,16 +814,20 @@ function boardCtl(show) {
     if (show) {
         hiddenDom(global.hiddenBoard)
         showDom(global.board)
-        return
+    } else {
+        hiddenDom(global.board)
+        showDom(global.hiddenBoard)
     }
-    hiddenDom(global.board)
-    showDom(global.hiddenBoard)
+
+    global.show = show
+    saveGlobal()
 }
 
 //操作面板
 function operationBoard() {
     document.body.appendChild(board())
     document.body.appendChild(hiddenBoard())
+    boardCtl(global.show)
     moveDom(global.board)
 }
 
