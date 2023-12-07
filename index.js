@@ -1,8 +1,8 @@
 // ==UserScript==
-// @name         FillText
+// @name         剪贴板 FillText
 // @namespace    http://tampermonkey.net/
-// @version      0.1
-// @description  快速填写预设文本到输入框。
+// @version      1.5
+// @description  快速填写预设文本到输入框，适用于所有https网站。
 // @author       Unitiny
 // @match        https://*/*
 // @icon         data:image/gif;base64,R0lGODlhAQABAAAAACH5BAEKAAEALAAAAAABAAEAAAICTAEAOw==
@@ -12,7 +12,7 @@
 // @license MIT
 // ==/UserScript==
 
-let online = true
+let online = true;
 let global = {};
 const flex = {
     bs: "space-between", start: "flex-start", end: "flex-end", center: "center", column: "column", row: "row"
@@ -23,14 +23,8 @@ const flex = {
     initStyle()
     setInputDom()
     operationBoard()
-    saveGlobalInterval()
+    // saveGlobalInterval()
 })();
-
-function icons() {
-    // <span className="material-symbols-outlined">delete</span>
-    // <span className="material-symbols-outlined">colorize</span>
-    // <span className="material-symbols-outlined">remove</span>
-}
 
 function getLink() {
     let link = document.createElement("link");
@@ -240,6 +234,7 @@ function containKeys(a, b) {
 
 function defaultGlobal() {
     return {
+        id: 0, //global版本号
         order: 0,
         style: {},
         show: true,
@@ -270,6 +265,10 @@ function defaultGlobal() {
     }
 }
 
+function checkGlobal(data) {
+    return data && JSON.stringify(data) !== "{}" && containKeys(data, defaultGlobal())
+}
+
 function saveGlobalInterval() {
     setInterval(function () {
         saveGlobal()
@@ -277,7 +276,23 @@ function saveGlobalInterval() {
 }
 
 function saveGlobal(g = global) {
-    online ? GM_setValue("fillTextGlobal", g) : null;
+    console.log("saveGlobal", g)
+    if(!online) {
+        return false
+    }
+
+    let lastG = GM_getValue("fillTextGlobal")
+    if(!checkGlobal(lastG)) {
+        GM_setValue("fillTextGlobal", g)
+        return true
+    }
+
+    g.id++
+    if (checkGlobal(g) && lastG.id < g.id) {
+        GM_setValue("fillTextGlobal", g)
+        return true
+    }
+    return false
 }
 
 function getGlobal() {
@@ -286,7 +301,7 @@ function getGlobal() {
     }
 
     let data = GM_getValue("fillTextGlobal")
-    if (!data || JSON.stringify(data) === "{}" || !containKeys(data, defaultGlobal())) {
+    if (!checkGlobal(data)) {
         saveGlobal(defaultGlobal())
         return defaultGlobal()
     }
@@ -401,6 +416,10 @@ function getCategorySpan(i, cate) {
     return span
 }
 
+function changeBoardHeight(h) {
+    global.board.style.height = parseInt(global.board.style.height) + h + "px"
+}
+
 //设置input节点
 function setInputDom() {
     let t = setInterval(() => {
@@ -458,6 +477,7 @@ function setInputDom() {
             })
         })
         global.inputDoms = inputDoms
+        //有拿到inputDoms
         if (inputDoms.length > 0) {
             clearInterval(t)
         }
@@ -772,6 +792,8 @@ function bottomOperation() {
         <span id="${prefixStr("orderOperation")}" style="${global.style.operationStyle}margin-right: 0px;">先填后选</span>
     </div>
     <div style="${flexStyle({jc: flex.end})}margin: 0 20px 10px 0px;">
+        <span style="${global.style.operationStyle}">⬆</span>
+        <span style="${global.style.operationStyle}">⬇</span>
         <span style="${global.style.operationStyle}">添加分类</span>
         <span style="${global.style.operationStyle}margin-right: 0px;">分类列表</span>
     </div>
@@ -780,9 +802,23 @@ function bottomOperation() {
     </div>
 </div>`
 
-    let list = [editKey, showInput, delSpan, delAllSpan, doc, saveGlobal, changeOrder, showCateInput, categoryList]
+    let list = [editKey, showInput, delSpan, delAllSpan, doc, saveGlobal, changeOrder, changeBoardHeight, changeBoardHeight, showCateInput, categoryList]
     list.forEach((v, i) => {
-        operation.getElementsByTagName("span")[i].addEventListener("click", v)
+        if (v.name === "changeBoardHeight") {
+            operation.getElementsByTagName("span")[i].addEventListener("click", function () {
+                i % 2 === 0 ? v(40) : v(-40)
+            })
+        } else if (v.name === "saveGlobal") {
+            operation.getElementsByTagName("span")[i].addEventListener("click", function () {
+                if(saveGlobal()){
+                    alert(`保存成功!`)
+                } else {
+                    alert(`配置数据太旧，无法保存。请刷新页面后再编辑保存`)
+                }
+            })
+        } else {
+            operation.getElementsByTagName("span")[i].addEventListener("click", v)
+        }
     })
     return operation
 }
