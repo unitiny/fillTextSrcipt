@@ -12,19 +12,99 @@
 // @license MIT
 // ==/UserScript==
 
-let online = true;
-let global = {};
-const flex = {
-    bs: "space-between", start: "flex-start", end: "flex-end", center: "center", column: "column", row: "row"
+let Global = {};
+const CSS = {
+    flex: {
+        bs: "space-between", start: "flex-start", end: "flex-end", center: "center", column: "column", row: "row"
+    },
 };
 (function () {
-    global = getGlobal()
+    Global = getGlobal()
     loadResource()
     initStyle()
     setInputDom()
     operationBoard()
-    // saveGlobalInterval()
 })();
+
+/**
+ * 初始化
+ */
+//设置input节点
+function setInputDom() {
+    let t = setInterval(() => {
+        let downingKeys = [];
+        let editKey = "";
+        let inputDoms = document.querySelectorAll('input');
+        inputDoms.forEach(function (dom, i) {
+            dom.setAttribute(Global.attributeName, i)
+            dom.addEventListener("click", function (event) {
+                let d = event.target
+                Global.curInputDom = d.getAttribute(Global.attributeName)
+                if (Global.order === 1) {
+                    d.value = getSpanText(Global.curSpan)
+                }
+            })
+            dom.addEventListener("keydown", function (event) {
+                //快捷键模式，按下Alt开始
+                if (event.key === "Alt") {
+                    downingKeys = []
+                    downingKeys.push(event.key)
+                    editKey = event.key
+                    return
+                }
+                if (downingKeys.length > 0) {
+                    if (downingKeys.indexOf(event.key) !== -1) return;
+                    downingKeys.push(event.key)
+                    editKey += "+" + event.key
+                    getCurCateVal().spans.map(v => {
+                        if (editKey === v.key) {
+                            dom.value = getSpanText(v.index) || dom.value
+                            event.preventDefault()
+                            downingKeys = []
+                            editKey = ""
+                        }
+                    })
+                    return;
+                }
+
+                //编辑模式
+                let str = dom.value + event.key
+                getCurCateVal().spans.map(v => {
+                    if (str === v.key.split("+").join("")) {
+                        dom.value = getSpanText(v.index) || dom.value
+                        event.preventDefault() //阻止写入该字符
+                    }
+                })
+            })
+            dom.addEventListener("keyup", function (event) {
+                let i = downingKeys.indexOf(event.key)
+                i !== -1 ? downingKeys.splice(i, 1) : null
+                if (event.key === "Alt") {
+                    downingKeys = []
+                    editKey = ""
+                }
+            })
+        })
+        Global.inputDoms = inputDoms
+        //有拿到inputDoms
+        if (inputDoms.length > 0) {
+            clearInterval(t)
+        }
+    }, 1000)
+}
+
+/**
+ * 工具函数
+ */
+
+function isOnline() {
+    return !window.location.host.includes("localhost")
+}
+
+//添加前缀来防止与原页面id重复
+function prefixStr(str) {
+    return `${Global.prefix}-${str}`
+}
 
 function getLink() {
     let link = document.createElement("link");
@@ -37,9 +117,20 @@ function loadResource() {
     document.head.appendChild(getLink());
 }
 
+function containKeys(a, b) {
+    const aKeys = Object.keys(a);
+    const bKeys = Object.keys(b);
+
+    return aKeys.length >= bKeys.length && bKeys.every(key => aKeys.includes(key));
+}
+
+/**
+ * 样式区
+ */
+
 function initStyle() {
-    global.style.boardStyle = `
-    ${flexStyle({jc: flex.bs, fd: flex.column})}
+    CSS.boardStyle = `
+    ${flexStyle({jc: CSS.flex.bs, fd: CSS.flex.column})}
     position: absolute;
     left: 0px;
     top: 0px;
@@ -51,7 +142,7 @@ function initStyle() {
     border-radius: 5px;
     overflow: auto;
     z-index:999;`
-    global.style.hiddenBoardStyle = `
+    CSS.hiddenBoardStyle = `
     ${flexStyle({})}
     position: absolute;
     left: 0px;
@@ -66,15 +157,15 @@ function initStyle() {
     background: skyblue;
     z-index:999;
     display: none;`
-    global.style.divStyle = `
-                ${flexStyle({fd: flex.column})}
+    CSS.divStyle = `
+                ${flexStyle({fd: CSS.flex.column})}
                 width: 300px;
                 height: 400px;
                 margin: 10px;
                 border: 1px solid skyblue;
                 border-radius: 5px;
                 overflow: auto`
-    global.style.cateSpanStyle = `
+    CSS.cateSpanStyle = `
                 padding: 5px 12px;
                 width: auto;
                 height: 35px;
@@ -85,8 +176,8 @@ function initStyle() {
                 text-align: center;
                 line-height: 33px;
                 margin-right: 10px;`
-    global.style.spanStyle = `
-                ${flexStyle({jc: flex.center, ai: flex.start, fd: flex.column})}
+    CSS.spanStyle = `
+                ${flexStyle({jc: CSS.flex.center, ai: CSS.flex.start, fd: CSS.flex.column})}
                 flex-grow: 0;
                 flex-shrink: 0;
                 min-width: 250px;
@@ -98,14 +189,14 @@ function initStyle() {
                 border-radius: 7px;
                 height: 70px;
                 padding: 0 10px 0 10px;`
-    global.style.pStyle = `
+    CSS.pStyle = `
     word-break: break-all;
     overflow: hidden;
     text-overflow: ellipsis;
     display: -webkit-box;
     -webkit-box-orient: vertical;
     -webkit-line-clamp: 2;`
-    global.style.operationStyle = `
+    CSS.operationStyle = `
     padding: 0 12px 0 12px;
     width: auto;
     height: 35px;
@@ -116,7 +207,7 @@ function initStyle() {
     text-align: center;
     line-height: 33px;
     margin-right: 10px;`
-    global.style.textArea = `
+    CSS.textArea = `
     border: 1px solid ${themeColor()};
     border-radius: 5px;
     flex-grow: 0;
@@ -126,7 +217,7 @@ function initStyle() {
     min-height: 100px;
     max-height: 100px;
     margin: 10px 0 10px 0;`
-    global.style.iconStyle = `
+    CSS.iconStyle = `
     font-family: 'Material Symbols Outlined';
     font-weight: normal;
     font-style: normal;
@@ -140,30 +231,25 @@ function initStyle() {
     direction: ltr;
     -webkit-font-feature-settings: 'liga';
     -webkit-font-smoothing: antialiased;`
-    global.style.spanSettingStyle = `
+    CSS.spanSettingStyle = `
     width: 100%;
-    ${flexStyle({jc: flex.end})}
+    ${flexStyle({jc: CSS.flex.end})}
     `
-    global.style.displayNone = "display: none;"
-    global.style.displayFlex = "display: flex;"
-    global.style.borderRed = "border: 1px solid red;"
-    global.style.borderSkyblue = "border: 1px solid skyblue;"
+    CSS.displayNone = "display: none;"
+    CSS.displayFlex = "display: flex;"
+    CSS.borderRed = "border: 1px solid red;"
+    CSS.borderSkyblue = "border: 1px solid skyblue;"
 }
 
 function themeColor() {
-    return global.theme ? "skyblue" : "black"
-}
-
-//添加前缀来防止与原页面id重复
-function prefixStr(str) {
-    return `${global.prefix}-${str}`
+    return Global.theme ? "skyblue" : "black"
 }
 
 function isShow(show) {
-    return show ? "" : global.style.displayNone
+    return show ? "" : CSS.displayNone
 }
 
-function showDom(dom, add = global.style.displayFlex) {
+function showDom(dom, add = CSS.displayFlex) {
     dom.style.cssText = dom.style.cssText.replace(isShow(false), "")
     dom.style.cssText += add
 }
@@ -183,55 +269,17 @@ function replaceStyle(dom, key, value) {
     dom.style.cssText = list.join(";")
 }
 
-function flexStyle({jc = flex.center, ai = flex.center, fd = flex.row}) {
+function flexStyle({jc = CSS.flex.center, ai = CSS.flex.center, fd = CSS.flex.row}) {
     return `display: flex;
             justify-content: ${jc};
             align-items: ${ai};
             flex-direction: ${fd};`
 }
 
-function toBottom() {
-    global.board.scrollTop = global.board.scrollHeight
-}
 
-function moveDom(dom) {
-    let isDragging = false;
-    let x, y;
-
-    dom.addEventListener("mousedown", function (event) {
-        isDragging = true;
-        x = event.x;
-        y = event.y;
-    });
-
-    dom.addEventListener("mousemove", function (event) {
-        if (isDragging) {
-            let offsetX = event.x - x;
-            let offsetY = event.y - y;
-
-            dom.style.left = parseInt(dom.style.left) + offsetX + "px";
-            dom.style.top = parseInt(dom.style.top) + offsetY + "px";
-            x = event.x
-            y = event.y
-        }
-    });
-
-    dom.addEventListener("mouseup", function () {
-        isDragging = false;
-    });
-}
-
-function doc() {
-    alert("快捷键建议Alt开头或纯字母数字，如：Alt+1、qq、11")
-}
-
-function containKeys(a, b) {
-    const aKeys = Object.keys(a);
-    const bKeys = Object.keys(b);
-
-    return aKeys.length >= bKeys.length && bKeys.every(key => aKeys.includes(key));
-}
-
+/**
+ * Global
+ */
 function defaultGlobal() {
     return {
         id: 0, //global版本号
@@ -249,17 +297,13 @@ function defaultGlobal() {
         category: [
             {
                 name: "default",
-                spansText: randText(),
-                setting: {
-                    spans: []
-                }
+                setting: {},
+                spans: randSpans()
             },
             {
                 name: "常用",
-                spansText: [],
-                setting: {
-                    spans: []
-                }
+                setting: {},
+                spans: []
             }
         ]
     }
@@ -275,14 +319,14 @@ function saveGlobalInterval() {
     }, 1000 * 30)
 }
 
-function saveGlobal(g = global) {
+function saveGlobal(g = Global) {
     console.log("saveGlobal", g)
-    if(!online) {
+    if (!isOnline()) {
         return false
     }
 
     let lastG = GM_getValue("fillTextGlobal")
-    if(!checkGlobal(lastG)) {
+    if (!checkGlobal(lastG)) {
         GM_setValue("fillTextGlobal", g)
         return true
     }
@@ -296,7 +340,7 @@ function saveGlobal(g = global) {
 }
 
 function getGlobal() {
-    if (!online) {
+    if (!isOnline()) {
         return defaultGlobal();
     }
 
@@ -309,22 +353,26 @@ function getGlobal() {
     return data
 }
 
+/**
+ * 分类
+ */
+
 function getCurCateVal() {
-    for (const v of global.category) {
-        if (v.name === global.curCate) {
+    for (const v of Global.category) {
+        if (v.name === Global.curCate) {
             return v
         }
     }
-    return global.category[0]
+    return Global.category[0]
 }
 
 function showCateInput() {
-    if (global.board.childNodes.length > global.boardChildNodes + 1) {
+    if (Global.board.childNodes.length > Global.boardChildNodes + 1) {
         return
     }
     let el = document.createElement("input");
     el.placeholder = "请输入内容，按回车添加"
-    el.style.cssText = global.style.textArea
+    el.style.cssText = CSS.textArea
     replaceStyle(el, "border", `1px solid ${themeColor()}`)
     el.addEventListener("keydown", function (event) {
         if (event.key === "Enter") {
@@ -333,7 +381,7 @@ function showCateInput() {
             toBottom()
         }
     })
-    global.board.appendChild(el)
+    Global.board.appendChild(el)
     toBottom()
 }
 
@@ -343,7 +391,7 @@ function addCategory(name) {
         return
     }
     let has = false
-    global.category.forEach((v, i) => {
+    Global.category.forEach((v, i) => {
         if (v.name === name) {
             alert("已存在该分类")
             has = true
@@ -352,43 +400,43 @@ function addCategory(name) {
     })
 
     if (has) return
-    global.category.push({
+    Global.category.push({
         name: name,
         spansText: [],
-        setting: {
-            spans: []
-        }
+        setting: {},
+        spans: []
     })
+    Global.curCate = Global.category.length - 1
     saveGlobal()
 }
 
 function delCategory(name) {
     let index = 0
-    global.category.map((v, i) => {
+    Global.category.map((v, i) => {
         if (v.name === name) {
             index = i
         }
     })
-    global.category.splice(index, 1)
+    Global.category.splice(index, 1)
     saveGlobal()
 }
 
 function categoryList() {
     let list = []
-    for (let i = 0; i < global.category.length; i++) {
-        list.push(getCategorySpan(i, global.category[i]))
+    for (let i = 0; i < Global.category.length; i++) {
+        list.push(getCategorySpan(i, Global.category[i]))
     }
     let div = document.createElement("div")
     div.setAttribute("id", prefixStr("categoryList"))
-    div.style.cssText = `${flexStyle({jc: flex.start})}width:80%; margin: 0 20px 10px 0px;`
+    div.style.cssText = `${flexStyle({jc: CSS.flex.start})}width:80%; margin: 0 20px 10px 0px;`
     div.append(...list)
-    global.board.appendChild(div)
+    Global.board.appendChild(div)
     toBottom()
 }
 
 function getCategorySpan(i, cate) {
     let close = document.createElement("span")
-    close.style = global.style.iconStyle
+    close.style = CSS.iconStyle
     close.style.cssText += `
     position: absolute;
     right: -9px;
@@ -403,90 +451,83 @@ function getCategorySpan(i, cate) {
 
     let span = document.createElement("span")
     span.innerText = cate.name
-    span.style.cssText = global.style.cateSpanStyle
+    span.style.cssText = CSS.cateSpanStyle
     span.style.cssText += `position: relative;`
     span.addEventListener("click", function (event) {
-        global.curSpan = 0
-        global.curCate = cate.name
+        Global.curSpan = 0
+        Global.curCate = cate.name
         renderBoard(renderSpan())
-        document.getElementById(prefixStr("curCate")).innerText = `当前分类：${global.curCate}`
+        document.getElementById(prefixStr("curCate")).innerText = `当前分类：${Global.curCate}`
     })
 
     if (i !== 0) span.appendChild(close)
     return span
 }
 
-function changeBoardHeight(h) {
-    global.board.style.height = parseInt(global.board.style.height) + h + "px"
-}
+/**
+ * 文本栏
+ */
 
-//设置input节点
-function setInputDom() {
-    let t = setInterval(() => {
-        let downingKeys = [];
-        let editKey = "";
-        let inputDoms = document.querySelectorAll('input');
-        inputDoms.forEach(function (dom, i) {
-            dom.setAttribute(global.attributeName, i)
-            dom.addEventListener("click", function (event) {
-                let d = event.target
-                global.curInputDom = d.getAttribute(global.attributeName)
-                if (global.order === 1) {
-                    d.value = getCurCateVal().spansText[global.curSpan]
-                }
-            })
-            dom.addEventListener("keydown", function (event) {
-                //快捷键模式，按下Alt开始
-                if (event.key === "Alt") {
-                    downingKeys = []
-                    downingKeys.push(event.key)
-                    editKey = event.key
-                    return
-                }
-                if (downingKeys.length > 0) {
-                    if (downingKeys.indexOf(event.key) !== -1) return;
-                    downingKeys.push(event.key)
-                    editKey += "+" + event.key
-                    getCurCateVal().setting.spans.map(v => {
-                        if (editKey === v.key) {
-                            dom.value = getCurCateVal().spansText[v.index] || dom.value
-                            event.preventDefault()
-                            downingKeys = []
-                            editKey = ""
-                        }
-                    })
-                    return;
-                }
-
-                //编辑模式
-                let str = dom.value + event.key
-                getCurCateVal().setting.spans.map(v => {
-                    if (str === v.key.split("+").join("")) {
-                        dom.value = getCurCateVal().spansText[v.index] || dom.value
-                        event.preventDefault() //阻止写入该字符
-                    }
-                })
-            })
-            dom.addEventListener("keyup", function (event) {
-                let i = downingKeys.indexOf(event.key)
-                i !== -1 ? downingKeys.splice(i, 1) : null
-                if (event.key === "Alt") {
-                    downingKeys = []
-                    editKey = ""
-                }
-            })
-        })
-        global.inputDoms = inputDoms
-        //有拿到inputDoms
-        if (inputDoms.length > 0) {
-            clearInterval(t)
+//输入栏添加span
+function showInput() {
+    if (Global.board.childNodes.length > Global.boardChildNodes + 1) {
+        return
+    }
+    let el = document.createElement("input");
+    el.placeholder = "请输入内容，按回车添加"
+    el.style.cssText = CSS.textArea
+    replaceStyle(el, "border", `1px solid ${themeColor()}`)
+    el.addEventListener("keydown", function (event) {
+        if (event.key === "Enter") {
+            addSpan(event.target.value, {})
+            renderBoard(renderSpan())
+            toBottom()
+            saveGlobal()
         }
-    }, 1000)
+    })
+    Global.board.appendChild(el)
+    toBottom()
 }
 
-function randText() {
-    if (online) {
-        return ["点击输入框，再点击该文本即可自动填写。也可设置快捷键填写。"]
+function addSpan(text, {
+    cancel = false,
+    editKey = "",
+    finish = false,
+    index = 0,
+    input = false,
+    key = "",
+    set = false,
+    show = false
+}) {
+    let s = createSpanData(text, getCurCateVal().spans.length)
+    s.show = show
+    s.input = input
+    s.set = set
+    s.finish = finish
+    s.cancel = cancel
+    s.index = index
+    s.key = key
+    s.editKey = editKey
+    getCurCateVal().spans.push(s)
+}
+
+function createSpanData(text, i = 0) {
+    return {
+        text: text,
+        cancel: false,
+        editKey: "",
+        finish: false,
+        index: i,
+        input: false,
+        key: "",
+        set: false,
+        show: false,
+    }
+}
+
+function randSpans() {
+    if (isOnline()) {
+        return [createSpanData("点击输入框，再点击该文本即可自动填写。也可设置快捷键填写。")]
     }
     let list = []
     for (let i = 0; i < Math.round(Math.random() * 10 + 3); i++) {
@@ -494,65 +535,45 @@ function randText() {
         for (let j = 0; j < Math.round(Math.random() * 50 + 10); j++) {
             s += Math.round(Math.random() * 10).toString()
         }
-        list.push(s)
+        list.push(createSpanData(s, i))
     }
     return list
 }
 
-//输入栏添加span
-function showInput() {
-    if (global.board.childNodes.length > global.boardChildNodes + 1) {
-        return
-    }
-    let el = document.createElement("input");
-    el.placeholder = "请输入内容，按回车添加"
-    el.style.cssText = global.style.textArea
-    replaceStyle(el, "border", `1px solid ${themeColor()}`)
-    el.addEventListener("keydown", function (event) {
-        if (event.key === "Enter") {
-            getCurCateVal().spansText.push(event.target.value)
-            renderBoard(renderSpan())
-            toBottom()
-            saveGlobal()
-        }
-    })
-    global.board.appendChild(el)
-    toBottom()
-}
-
 function getSpanText(index) {
-    return getCurCateVal().spansText[index]
+    return getCurCateVal().spans[index].text
 }
 
 function getSpans() {
     let list = []
-    for (let i = 0; i < getCurCateVal().spansText.length; i++) {
-        list.push(getSpan(i, getCurCateVal().spansText[i]))
+    for (let i = 0; i < getCurCateVal().spans.length; i++) {
+        list.push(getSpan(i, getSpanText(i)))
     }
     return list
 }
 
 function getSpan(i, text) {
     let span = document.createElement("span")
+    span.tabIndex = 0
     span.innerHTML = `
-<p style="${global.style.pStyle}">${text}</p>
-<div style="${global.style.spanSettingStyle}${isShow(getSpanSetting(i).show)}">
+<p style="${CSS.pStyle}">${text}</p>
+<div style="${CSS.spanSettingStyle}${isShow(getSpanData(i).show)}">
 
-<input id="settingInput${i}" style="width: 80%; height: 30px;${isShow(getSpanSetting(i).input)}" type="text" placeholder="请按键设置" readonly>
+<input id="settingInput${i}" style="width: 80%; height: 30px;${isShow(getSpanData(i).input)}" type="text" placeholder="请按键设置" readonly>
 
-<span style="${global.style.iconStyle}${isShow(getSpanSetting(i).set)}">settings</span>
+<span style="${CSS.iconStyle}${isShow(getSpanData(i).set)}">settings</span>
 
-<span style="${global.style.iconStyle}${isShow(getSpanSetting(i).finish)}">done</span>
+<span style="${CSS.iconStyle}${isShow(getSpanData(i).finish)}">done</span>
 
-<span style="${global.style.iconStyle}${isShow(getSpanSetting(i).cancel)}">close</span>
+<span style="${CSS.iconStyle}${isShow(getSpanData(i).cancel)}">close</span>
 </div>
 `
-    span.style.cssText = global.style.spanStyle
+    span.style.cssText = CSS.spanStyle
     replaceStyle(span, "border", `1px solid ${themeColor()}`)
     span.addEventListener("click", function (event) {
         selectSpan(i)
-        if (global.order === 0) {
-            let target = `${global.attributeName}="${global.curInputDom}"`
+        if (Global.order === 0) {
+            let target = `${Global.attributeName}="${Global.curInputDom}"`
             let element = document.querySelector(`input[${target}]`);
             element.value = text
         }
@@ -571,57 +592,76 @@ function getSpan(i, text) {
     return span
 }
 
-function selectSpan(i) {
+function selectSpan(i=Global.curSpan) {
     let spanNodes = getCurCateVal().spanList.childNodes
-    replaceStyle(spanNodes[global.curSpan], "border", `1px solid ${themeColor()}`)
-    global.curSpan = i
-    replaceStyle(spanNodes[global.curSpan], "border", "1px solid red")
+    replaceStyle(spanNodes[Global.curSpan], "border", `1px solid ${themeColor()}`)
+    spanNodes[Global.curSpan].removeEventListener("keydown", moveSpan)
+
+    Global.curSpan = i
+    replaceStyle(spanNodes[Global.curSpan], "border", "1px solid red")
+    spanNodes[Global.curSpan].addEventListener("keydown", moveSpan)
+}
+
+function moveSpan(event) {
+    console.log(11)
+    if (event.altKey) {
+        let arrow = 0
+        if(event.key === 'ArrowDown') {
+            if(Global.curSpan >= getCurCateVal().spans.length-1) {
+                return
+            }
+            arrow = 1
+        } else if(event.key === 'ArrowUp') {
+            if(Global.curSpan <= 0) {
+                return
+            }
+            arrow = -1
+        }
+        if(arrow !== 0) {
+            let s = getCurCateVal().spans[Global.curSpan]
+            getCurCateVal().spans.splice(Global.curSpan, 1)
+            getCurCateVal().spans.splice(Global.curSpan+arrow, 0, s)
+            Global.curSpan = Global.curSpan+arrow
+            renderBoard(renderSpan())
+
+        }
+    }
 }
 
 function delSpan() {
-    getCurCateVal().spansText.splice(global.curSpan, 1)
-
-    let i = 0
-    getCurCateVal().setting.spans.map((v, index) => {
-        if (v.index === global.curSpan) {
-            i = index
-        }
-    })
-    getCurCateVal().setting.spans.splice(i, 1)
-    global.curSpan = 0
+    getCurCateVal().spans.splice(Global.curSpan, 1)
+    Global.curSpan = 0
     renderBoard(renderSpan())
     saveGlobal()
 }
 
 function delAllSpan() {
-    getCurCateVal().spansText = []
+    getCurCateVal().spans = []
     renderBoard(renderSpan())
     saveGlobal()
-}
-
-function renderBoard(spanListDom) {
-    global.board.replaceChild(spanListDom, global.board.childNodes[1])
-    let l = global.board.childNodes.length
-    if (l > global.boardChildNodes) {
-        for (let i = global.boardChildNodes; i < l; i++) {
-            global.board.removeChild(global.board.lastChild)
-        }
-    }
 }
 
 function renderSpan() {
     let div = document.createElement("div");
     div.setAttribute("id", "textSpanList")
-    div.style.cssText = flexStyle({fd: flex.column})
+    div.style.cssText = flexStyle({fd: CSS.flex.column})
     div.append(...getSpans())
     getCurCateVal().spanList = div
     return div
 }
 
+function getSpanData(index) {
+    return index >= 0 ? getCurCateVal().spans[index] : getCurCateVal().setting
+}
+
+/**
+ * 快捷键
+ */
+
 function changeOrder() {
     let d = document.getElementById(prefixStr("orderOperation"))
     d.innerText = d.innerText === "先填后选" ? "先选后填" : "先填后选"
-    global.order = global.order ? 0 : 1
+    Global.order = Global.order ? 0 : 1
     saveGlobal()
 }
 
@@ -630,24 +670,15 @@ function editKey() {
 }
 
 function settingCtl({show = true, input = false, set = true, finish = false, cancel = false, index = -1}) {
+    console.log(index, getCurCateVal().spans.length)
     if (index !== -1) {
         //单span控制
-        let has = false
-        for (const span of getCurCateVal().setting.spans) {
-            if (span.index === index) {
-                span.show = show
-                span.input = input
-                span.set = set
-                span.finish = finish
-                span.cancel = cancel
-                has = true
-            }
-        }
-        if (!has) {
-            getCurCateVal().setting.spans.push({
-                show: show, input: input, set: set, finish: finish, cancel: cancel, index: index, key: "", editKey: ""
-            })
-        }
+        let span = getCurCateVal().spans[index]
+        getCurCateVal().spans[index].show = show
+        getCurCateVal().spans[index].input = input
+        getCurCateVal().spans[index].set = set
+        getCurCateVal().spans[index].finish = finish
+        getCurCateVal().spans[index].cancel = cancel
     } else {
         //全局控制
         getCurCateVal().setting.show = show
@@ -655,7 +686,7 @@ function settingCtl({show = true, input = false, set = true, finish = false, can
         getCurCateVal().setting.set = set
         getCurCateVal().setting.finish = finish
         getCurCateVal().setting.cancel = cancel
-        getCurCateVal().setting.spans.map(v => {
+        getCurCateVal().spans.map(v => {
             v.show = show
             v.input = input
             v.set = set
@@ -674,7 +705,7 @@ function settingCtl({show = true, input = false, set = true, finish = false, can
 }
 
 function listenKey(index) {
-    let ss = getSpanSetting(index)
+    let ss = getSpanData(index)
     let input = document.getElementById("settingInput" + index);
     input.focus()
     input.value = ss.key
@@ -710,9 +741,9 @@ function listenKey(index) {
 }
 
 function saveKey(index) {
-    let ss = getSpanSetting(index)
+    let ss = getSpanData(index)
     let has = false
-    getCurCateVal().setting.spans.map(v => {
+    getCurCateVal().spans.map(v => {
         if (v.key === ss.editKey && v.index !== ss.index) {
             alert(`文本 ${getSpanText(v.index)} 已设置该快捷键`)
             has = true
@@ -727,29 +758,42 @@ function saveKey(index) {
 }
 
 function cancel(index) {
-    let ss = getSpanSetting(index)
+    let ss = getSpanData(index)
     ss.editKey = ""
     settingCtl({index: index})
 }
 
-function getSpanSetting(index) {
-    let set = getCurCateVal().setting.spans.filter((v) => {
-        return index === v.index
-    })
-    return set.length > 0 ? set[0] : getCurCateVal().setting
+
+/**
+ * 控制面板
+ */
+
+function changeBoardHeight(h) {
+    Global.board.style.height = parseInt(Global.board.style.height) + h + "px"
+}
+
+function renderBoard(spanListDom) {
+    Global.board.replaceChild(spanListDom, Global.board.childNodes[1])
+    let l = Global.board.childNodes.length
+    if (l > Global.boardChildNodes) {
+        for (let i = Global.boardChildNodes; i < l; i++) {
+            Global.board.removeChild(Global.board.lastChild)
+        }
+    }
+    selectSpan()
 }
 
 function modeCtl() {
-    if (global.theme) {
-        global.theme = false
-        replaceStyle(global.board, "border", `5px solid ${themeColor()}`)
+    if (Global.theme) {
+        Global.theme = false
+        replaceStyle(Global.board, "border", `5px solid ${themeColor()}`)
         getCurCateVal().spanList.childNodes.forEach(v => {
             replaceStyle(v, "border", `1px solid ${themeColor()}`)
         })
         return
     }
-    global.theme = true
-    replaceStyle(global.board, "border", `5px solid ${themeColor()}`)
+    Global.theme = true
+    replaceStyle(Global.board, "border", `5px solid ${themeColor()}`)
     getCurCateVal().spanList.childNodes.forEach(v => {
         replaceStyle(v, "border", `1px solid ${themeColor()}`)
     })
@@ -760,10 +804,10 @@ function topOperation() {
     let operation = document.createElement("div")
     operation.style.width = "100%"
     operation.innerHTML = `
-<div id="${prefixStr("topOperation")}" style="${flexStyle({jc: flex.end})}margin: 0 20px 10px 0px;">
-    <span style="${global.style.iconStyle}font-size: 20px;">light_mode</span>
-    <span style="${global.style.iconStyle}">expand_more</span>
-    <span style="${global.style.iconStyle}">remove</span>
+<div id="${prefixStr("topOperation")}" style="${flexStyle({jc: CSS.flex.end})}margin: 0 20px 10px 0px;">
+    <span style="${CSS.iconStyle}font-size: 20px;">light_mode</span>
+    <span style="${CSS.iconStyle}">expand_more</span>
+    <span style="${CSS.iconStyle}">remove</span>
 </div>`
 
     let childSpan = operation.getElementsByTagName("span")
@@ -780,25 +824,25 @@ function bottomOperation() {
     operation.style.width = "100%"
     operation.innerHTML = `
 <div id="${prefixStr("bottomOperation")}">
-    <div style="${flexStyle({jc: flex.end})}margin: 0 20px 10px 0px;">
-        <span style="${global.style.operationStyle}" >快捷键</span>
-        <span style="${global.style.operationStyle}">添加</span>
-        <span style="${global.style.operationStyle}background: #ea5c5c;">删除</span>
-        <span style="${global.style.operationStyle}margin-right: 0px;background: #ea5c5c;">清空</span>
+    <div style="${flexStyle({jc: CSS.flex.end})}margin: 0 20px 10px 0px;">
+        <span style="${CSS.operationStyle}" >快捷键</span>
+        <span style="${CSS.operationStyle}">添加</span>
+        <span style="${CSS.operationStyle}background: #ea5c5c;">删除</span>
+        <span style="${CSS.operationStyle}margin-right: 0px;background: #ea5c5c;">清空</span>
     </div>
-    <div style="${flexStyle({jc: flex.end})}margin: 0 20px 10px 0px;">
-        <span style="${global.style.operationStyle}">说明</span>
-        <span style="${global.style.operationStyle}">保存配置</span>
-        <span id="${prefixStr("orderOperation")}" style="${global.style.operationStyle}margin-right: 0px;">先填后选</span>
+    <div style="${flexStyle({jc: CSS.flex.end})}margin: 0 20px 10px 0px;">
+        <span style="${CSS.operationStyle}">说明</span>
+        <span style="${CSS.operationStyle}">保存配置</span>
+        <span id="${prefixStr("orderOperation")}" style="${CSS.operationStyle}margin-right: 0px;">先填后选</span>
     </div>
-    <div style="${flexStyle({jc: flex.end})}margin: 0 20px 10px 0px;">
-        <span style="${global.style.operationStyle}">⬆</span>
-        <span style="${global.style.operationStyle}">⬇</span>
-        <span style="${global.style.operationStyle}">添加分类</span>
-        <span style="${global.style.operationStyle}margin-right: 0px;">分类列表</span>
+    <div style="${flexStyle({jc: CSS.flex.end})}margin: 0 20px 10px 0px;">
+        <span style="${CSS.operationStyle}">⬆</span>
+        <span style="${CSS.operationStyle}">⬇</span>
+        <span style="${CSS.operationStyle}">添加分类</span>
+        <span style="${CSS.operationStyle}margin-right: 0px;">分类列表</span>
     </div>
-    <div style="${flexStyle({jc: flex.end})}margin: 0 20px 10px 0px;">
-        <span id="${prefixStr("curCate")}" style="${global.style.operationStyle}margin-right: 0px;">当前分类：${global.curCate}</span>
+    <div style="${flexStyle({jc: CSS.flex.end})}margin: 0 20px 10px 0px;">
+        <span id="${prefixStr("curCate")}" style="${CSS.operationStyle}margin-right: 0px;">当前分类：${Global.curCate}</span>
     </div>
 </div>`
 
@@ -810,7 +854,7 @@ function bottomOperation() {
             })
         } else if (v.name === "saveGlobal") {
             operation.getElementsByTagName("span")[i].addEventListener("click", function () {
-                if(saveGlobal()){
+                if (saveGlobal()) {
                     alert(`保存成功!`)
                 } else {
                     alert(`配置数据太旧，无法保存。请刷新页面后再编辑保存`)
@@ -825,37 +869,37 @@ function bottomOperation() {
 
 function board() {
     let b = document.createElement("div");
-    b.style.cssText = global.style.boardStyle
+    b.style.cssText = CSS.boardStyle
     b.setAttribute("id", "fillTextBoard")
     b.appendChild(topOperation())
     b.appendChild(renderSpan())
     b.appendChild(bottomOperation())
-    global.board = b
+    Global.board = b
     return b
 }
 
 function hiddenBoard() {
     let hb = document.createElement("div")
-    hb.style.cssText = global.style.hiddenBoardStyle
+    hb.style.cssText = CSS.hiddenBoardStyle
     hb.setAttribute("id", "fillTextHiddenBoard")
-    hb.innerHTML = `<span style="${global.style.iconStyle}font-size:30px;pointer-events: none;">add</span>`
+    hb.innerHTML = `<span style="${CSS.iconStyle}font-size:30px;pointer-events: none;">add</span>`
     hb.addEventListener("click", function () {
         boardCtl(true)
     })
-    global.hiddenBoard = hb
+    Global.hiddenBoard = hb
     return hb
 }
 
 function boardCtl(show) {
     if (show) {
-        hiddenDom(global.hiddenBoard)
-        showDom(global.board)
+        hiddenDom(Global.hiddenBoard)
+        showDom(Global.board)
     } else {
-        hiddenDom(global.board)
-        showDom(global.hiddenBoard)
+        hiddenDom(Global.board)
+        showDom(Global.hiddenBoard)
     }
 
-    global.show = show
+    Global.show = show
     saveGlobal()
 }
 
@@ -863,10 +907,48 @@ function boardCtl(show) {
 function operationBoard() {
     document.body.appendChild(board())
     document.body.appendChild(hiddenBoard())
-    boardCtl(global.show)
-    moveDom(global.board)
+    boardCtl(Global.show)
+    moveDom(Global.board)
 }
 
+/**
+ * 响应事件区
+ */
+
+function toBottom() {
+    Global.board.scrollTop = Global.board.scrollHeight
+}
+
+function moveDom(dom) {
+    let isDragging = false;
+    let x, y;
+
+    dom.addEventListener("mousedown", function (event) {
+        isDragging = true;
+        x = event.x;
+        y = event.y;
+    });
+
+    dom.addEventListener("mousemove", function (event) {
+        if (isDragging) {
+            let offsetX = event.x - x;
+            let offsetY = event.y - y;
+
+            dom.style.left = parseInt(dom.style.left) + offsetX + "px";
+            dom.style.top = parseInt(dom.style.top) + offsetY + "px";
+            x = event.x
+            y = event.y
+        }
+    });
+
+    dom.addEventListener("mouseup", function () {
+        isDragging = false;
+    });
+}
+
+function doc() {
+    alert("快捷键建议Alt开头或纯字母数字，如：Alt+1、qq、11")
+}
 
 
 
